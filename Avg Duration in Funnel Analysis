@@ -1,0 +1,29 @@
+with cte1 as (
+select
+event_id,user_id,
+LEAD (event_id,1) OVER (ORDER BY timestamp_event) AS next_event_id,
+LEAD (event_name,1) OVER (ORDER BY timestamp_event) AS next_event_name,
+LEAD (user_id,1) OVER (ORDER BY timestamp_event) AS next_user_id,
+LEAD (timestamp_event,1) OVER (ORDER BY timestamp_event) AS next_event_time
+from `revoufsda-ecommerceu.EcommerceU_B3.event`
+order by timestamp_event
+),
+cte2 AS
+(
+select
+event.*,
+case
+ when cte1.next_user_id = event.user_id then date_diff(event.timestamp_event, cte1.next_event_time, minute)
+ --when cte1.next_user_id != event.user_id then 1 --maksudnya satu detik
+ end AS difference
+from `revoufsda-ecommerceu.EcommerceU_B3.event` as event join cte1 on event.event_id = cte1.event_id
+order by event.timestamp_event
+)
+SELECT 
+  cte2.event_name, ROUND(ABS(AVG(cte2.difference)),2) avg_duration,
+
+from cte2
+WHERE event_name IN ('product view', 'add to cart', 'view cart', 'choose address', 'choose delivery services', 'change payment method', 'checkout', 'complete')
+--WHERE event_name IN ('complete')
+GROUP BY 1
+ORDER BY 2
