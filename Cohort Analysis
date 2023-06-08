@@ -1,0 +1,47 @@
+with cohort_items as (
+  select
+    user_id,
+    MIN(date(date_trunc(register_date,MONTH))) as cohort_month,
+  from `revoufsda-ecommerceu.EcommerceU_B3.User`
+  GROUP BY 1
+),
+user_activities as (
+  select
+    act.user_id as user_id,
+    DATE_DIFF(
+      date(date_trunc(timestamp_event,MONTH)),
+      cohort.cohort_month,
+      MONTH
+    ) as month_number,
+  from `revoufsda-ecommerceu.EcommerceU_B3.Transaction` act
+  left join cohort_items cohort ON act.user_id = cohort.user_id
+  where extract(year from cohort.cohort_month) in (2019,2020,2021)
+  group by 1, 2
+),
+cohort_size as (
+    SELECT  cohort_month,
+    count(1) as num_users
+    FROM cohort_items
+    GROUP BY 1
+    ORDER BY 1
+),
+retention_table as (
+  select
+    C.cohort_month,
+    A.month_number,
+    count(1) as num_users
+  from user_activities A
+  left join cohort_items C ON A.user_id = C.user_id
+  group by 1, 2
+)
+-- our final value: (cohort_month, size, month_number, percentage)
+select
+  B.cohort_month,
+  S.num_users as cohort_size,
+  B.month_number,
+  B.num_users as total_users,
+  round((cast(B.num_users as decimal)/ S.num_users)*100,2)||'%' as percentage
+from retention_table B
+left join cohort_size S ON B.cohort_month = S.cohort_month
+where B.cohort_month IS NOT NULL
+order by 1, 3 
